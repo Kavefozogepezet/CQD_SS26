@@ -494,6 +494,7 @@ def psi_theta(model, params, spin):
     """
     Computes the wave function amplitude psi_theta for a given (flax-based) variational model for a single spin string.
     """
+
     log_psi = model.apply(params, spin)
     psi_theta = jnp.exp(log_psi)
     return psi_theta
@@ -502,6 +503,7 @@ def logpsi_star_theta(model, params, spin):
     """
     Computes the complex conjugate of the logarithmic wave function amplitude for a given (flax-based) variational model for a single spin string.
     """
+
     log_psi = model.apply(params, spin)
     return jnp.conj(log_psi)
 
@@ -509,21 +511,23 @@ def p_theta(model, params, spin):
     """
     Computes the Born distribution for a given (flax-based) variational model.
     """
+
     p_theta = jnp.abs(psi_theta(model, params, spin))**2
     return p_theta
 
 def grad_E_theta_MC_TFIM(B, model, params, spin_samples):
     """
     Computes the variational energy gradient of the 1D transverse field Ising model, for a given set of field strength B, model, parameters and set of spin samples.
-    It is important to use the physical spin values for computing the energy.
+    The energy is computed from the physical spin values s_phys = 2*s - 1, i.e. bit s=0 maps to the sigma_z eigenvalue -1,
+    matching the convention of operators.sigma_z_sparse (|0> = spin-down).
     """
 
     _, unravel_fn = jax.flatten_util.ravel_pytree(params)
 
     def get_Eloc(s, B):
 
-        # Compute the local energy estimate from the Hamiltonian 
-        s_phys = 1.0 - 2.0 * s
+        # Compute the local energy estimate from the Hamiltonian
+        s_phys = 2.0 * s - 1.0 # sigma_z eigenvalues, |0> -> -1 as in operators.sigma_z_sparse
         int_energy = -jnp.sum(s_phys * jnp.roll(s_phys, -1)) #energy from interactions
 
 
@@ -565,7 +569,7 @@ def grad_E_theta_MC_TFIM(B, model, params, spin_samples):
 
 def perform_gs_search(model, N_spins, init_params, B, num_iters, N_MC, lr, key):
     """ 
-    Performs a variational ground state search for the 1D TFIM for num_iters iterations and learning rate lr. 
+    Performs a variational ground state search for the 1D TFIM for `num_iters` iterations and learning rate `lr`. 
     init_params are the initial random variational parameters.
     """
 
@@ -612,15 +616,17 @@ def grad_E_theta_MC_tilted_TFIM(B, g, model, params, spin_samples):
     """
     Computes the variational energy gradient of the 1D tilted transverse field Ising model, for a given set of transverse field strength B, longitudinal field strength g,
     model, parameters and set of spin samples.
-    It is important to use the physical spin values for computing the energy.
+    The energy is computed from the physical spin values s_phys = 2*s - 1, i.e. bit s=0 maps to the sigma_z eigenvalue -1,
+    matching the convention of operators.sigma_z_sparse (|0> = spin-down), so the longitudinal term agrees in sign with
+    hamiltonians.build_H_tilted_TFIM_individual(N, B, g).
     """
 
     _, unravel_fn = jax.flatten_util.ravel_pytree(params)
 
     def get_Eloc(s, B, g):
 
-        # Compute the local energy estimate from the Hamiltonian 
-        s_phys = 1.0 - 2.0 * s
+        # Compute the local energy estimate from the Hamiltonian
+        s_phys = 2.0 * s - 1.0 # sigma_z eigenvalues, |0> -> -1 as in operators.sigma_z_sparse
         int_energy = -jnp.sum(s_phys * jnp.roll(s_phys, -1)) #energy from interactions
 
 
@@ -702,7 +708,7 @@ def perform_gs_search_tilted(model, init_params, N_spins, B, g, num_iters, N_MC,
         energy_history.append(Evar) # Save the variational energy at every iteration
 
         if i % 100 == 0 or i == num_iters - 1:
-            print(f"Iteration {i:4d} | Variational Energy: {Evar:.6f}")
+            jax.debug.print("Iteration {i:4d} | Variational Energy: {E:.6f}", i=i, E=Evar)
 
     return params, energy_history
 
@@ -751,7 +757,11 @@ def perform_gs_search_tilted_GPU_accelerated(model, init_params, N_spins, B, g, 
         next_params, next_opt_state, Evar = train_step(params, spin_samples, opt_state)
 
         def print_fn():
-            jax.debug.print("Iteration {i:4d} | Variational Energy: {E:.6f}", i=step_idx, E=Evar)
+            # No format specs (e.g. {i:4d}, {E:.6f}): older jax versions (the ones pip
+            # installs on Python 3.9, since modern jax requires >=3.11) eagerly validate
+            # the format string by calling format() on the *traced* args, and a tracer's
+            # __format__ rejects any non-empty spec with a TypeError.
+            jax.debug.print("Iteration {i} | Variational Energy: {E}", i=step_idx, E=Evar)
             
         # Conditionally execute the print statement
         jax.lax.cond(

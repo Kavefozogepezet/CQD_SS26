@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Comp_Quant_Dynam"
-version = "0.0.1"
+version = "1.0"
 description = "Code repository with sample solutions for the Computational Quantum Dynamics course by Prof. Gärttner (SS26, Jena)"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "numpy",
     "scipy",
